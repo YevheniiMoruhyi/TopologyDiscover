@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+
+#Importing all the neccessary modules
 import sys
 import re
 import os
@@ -6,6 +9,7 @@ import time
 import threading
 import socket
 
+#regex pattern for ip address search
 ip_addr_pattern = re.compile("^(((25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)\.){3}(25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)\/(3[0-2]|2\d|1\d|\d))(\s+\#.*|\s*)?$")
 #start_line_pattern = re.compile("^\s*#.*$")
 
@@ -82,15 +86,13 @@ except ImportError as err:
 #List of available ips
 available_ips = []
 
-#########################################
-#List (of dictionaries) of management information
+#List (of dictionaries) of management information for each device
 dev_manage_info = []
-#########################################
 
-#List with cdp information
+#List with cdp information for each device; "show cdp neighbors detail" command
 dev_cdp_list = []
 
-#List with general information about each device (list of dictionaries) "show version" command
+#List with general information for each device (list of dictionaries); "show version" command
 dev_ver_info = []
 
 
@@ -106,12 +108,14 @@ dev_iface_info = {}
 
 
 def open_ssh_conn(ip, pswd_list):
-	"""Documentation string for open_ssh_conn function"""
+	"""Create SSH connection to the device with a given ip address. Second argument is a password list.
+	Returns paramiko.SSHClient() object if successful or False if not"""
 
 	ssh_check = False
 
 	username = "admin"
 
+	#Dictionary which contain management information (username, password and management ip) for each device
 	global dev_manage 
 	dev_manage = {}
 
@@ -140,6 +144,7 @@ def open_ssh_conn(ip, pswd_list):
 			print Fore.WHITE + Style.BRIGHT + "\n"
 			break
 
+	#Evaluate ssh_check flag
 	if ssh_check == True:
 		dev_manage["username"] = username
 		dev_manage["password"] = pswd
@@ -152,8 +157,9 @@ def open_ssh_conn(ip, pswd_list):
 
 
 def gather_info(ssh_client):
-	"""Docs"""
+	"""Gather all the neccessary information for a device. Accepts paramiko.SSHClient() object"""
 
+	#Create a shell to execute commands
 	conn =  ssh_client.invoke_shell()
 
 	conn.send("terminal length 0\n")
@@ -173,20 +179,19 @@ def gather_info(ssh_client):
 	time.sleep(1)
 	output = conn.recv(50000)
 
-	#print output
-
+	#Find device hostname
 	dev_hostname = re.search(r"hostname (\S+)\s*", output)
 	if dev_hostname != None:
 		hostname = dev_hostname.group(1)
-		#print hostname
 
 	#Create a template object for "show ip int brief" command
 	sh_ip_int_b = textfsm.TextFSM(open(r"./templates/sh_ip_int_b.textfsm"))
 	sh_ip_int_b_res = sh_ip_int_b.ParseText(output)
-	#pprint(sh_ip_int_b_res)
 
-	#Create a dictionary with hostname and management ip) and add it to the list dev_ips
+	#Add to a dictionary hostname
 	dev_manage["hostname"] = hostname
+
+	#Add dev_manage dict to a list
 	dev_manage_info.append(dev_manage)
 
 	#Create a template object for "show interfaces" command
@@ -196,11 +201,14 @@ def gather_info(ssh_client):
 	#Template list for iface_dict dictionary
 	ifaces_temp = ["iface", "phy_st", "prot_st", "description", "ip_addr", "mtu", "bandwidth"]
 
+	#Create a list to contain all interfaces for a device
 	ifaces = []
 	for value in sh_ifaces_res:
+		#Create dictionary for each interface on a device
 		iface_dict = {key:value[index] for index, key in enumerate(ifaces_temp)}
 		ifaces.append(iface_dict)
 
+	#Add list with interfaces to a dictionary
 	dev_iface_info[hostname] = ifaces
 
 	#Create a template object for "show diag" command(search for adapter modules)
@@ -210,9 +218,10 @@ def gather_info(ssh_client):
 	#Template list for ad_modules dictionary
 	ad_mod_temp = ["slot_no", "module_name", "port_no", "status", "insert_time", "serial_no", "hard_rev", "pid"]
 
+	#Create list to contain all adapter modules for a device
 	adapter_modules = []
-	#Create a dictionary
 	for value in sh_diag_ad_res:
+		#Create a dictionary for each adapter module on a device
 		ad_modules = {key:value[index] for index, key in enumerate(ad_mod_temp)}
 		adapter_modules.append(ad_modules)
 
@@ -224,44 +233,50 @@ def gather_info(ssh_client):
 	#Template list for w_modules dictionary
 	wic_mod_temp = ["slot_no", "module_name", "hard_rev", "serial_no", "pid"]
 
+	#Create list to contain all WIC modules for a device
 	wic_modules = []
-	#Create dictionary
 	for value in sh_diag_wic_res:
+		#Create dictionary for each WIC module on a device
 		w_modules = {key:value[index] for index, key in enumerate(wic_mod_temp)}
 		wic_modules.append(w_modules)
 
+	#Add adapter and WIC modules for a device to the dictionary
 	dev_module_info[hostname] = [adapter_modules, wic_modules]
 
-
 	#Collecting cdp information
-	#Create a template obeject for "show cdp neighbors detail" command
+	#Create a template object for "show cdp neighbors detail" command
 	sh_cdp_nbr_d = textfsm.TextFSM(open(r"./templates/sh_cdp_nbr_d.textfsm"))
 	sh_cdp_nbr_d_res = sh_cdp_nbr_d.ParseText(output)
 
 	#Template list for cdp_nbr doctionary
 	cdp_nbr_temp = ["nbr_id", "nbr_domain", "nbr_ip", "host_iface", "nbr_iface"]
 
-	#Create dictionary
 	for value in sh_cdp_nbr_d_res:
+		#Create dictionary to contain neighbor information for a device
 		cdp_nbr = {key:value[index] for index, key in enumerate(cdp_nbr_temp)}
 		cdp_nbr["host_id"] = hostname
+
+		#Add cdp info for a device to a list
 		dev_cdp_list.append(cdp_nbr)
 
 
-
+	#Template list for sh_ver_dict doctionary
 	sh_ver_temp = ["sys_type", "hard_platform", "soft_name", "soft_ver", "hostname", "uptime",
 					"image", "proc_type", "proc_freq", "ram_mem", "shared_mem", "nvram", "conf_reg"]
 
+	#Create a template object for "show version" command
 	sh_ver = textfsm.TextFSM(open(r"./templates/sh_ver.textfsm"))
 	sh_ver_res = sh_ver.ParseText(output)
 
-
-
+	#Create a dictionary to contain general info for a device
 	sh_ver_dict = {key:sh_ver_res[0][index] for index, key in enumerate(sh_ver_temp)}
 
+	#Find EoL/EoS information for software version
+	#Initialise variables
 	eos = "No EoL informatiom found for the software"
 	last_day_of_sup = "No EoL informatiom found for the software"
 	eol = "No EoL informatiom found for the software"
+
 	#Find out EoS, Last day of support and EoL for the device
 	with open(r"./sources/dev_eol.csv") as dev_eol_file:
 		dev_eol_file.seek(0)
@@ -274,12 +289,14 @@ def gather_info(ssh_client):
 					eol = line_l[4]
 					break
 
+	#Add founded EoL/EoS info to the dictionary
 	sh_ver_dict["eos"] = eos
 	sh_ver_dict["last_day_of_sup"] = last_day_of_sup
 	sh_ver_dict["eol"] = eol
 
-
+	#Search for a device uptime from the output
 	uptime_value_list = sh_ver_dict["uptime"].split(", ")
+
 	#Getting the device uptime in seconds
 	y_sec = 0
 	w_sec = 0
@@ -300,7 +317,11 @@ def gather_info(ssh_client):
 			m_sec = int(i.split(" ")[0]) * 60
 
 	uptime = y_sec + w_sec + d_sec + h_sec + m_sec
+
+	#Add uptime in seconds to the dictionary
 	sh_ver_dict["uptime"] = str(uptime)
+
+	#Add dict to the list of general information for each device
 	dev_ver_info.append(sh_ver_dict)
 
 	#Create a dictionary for topology generation
@@ -308,19 +329,22 @@ def gather_info(ssh_client):
 		edge_tuple = (each_dict["host_id"], each_dict["nbr_id"])
 		neighborship_dict[edge_tuple] = (each_dict["nbr_iface"], each_dict["nbr_ip"])
 
-
 	#Find out unqueried ip addresses (remove queried ip addresses from the available_ips list)
 	for line in sh_ip_int_b_res:
 		nbr_ip = line[1]
-		#print "ip = " + nbr_ip
 		if nbr_ip in available_ips:
 			available_ips.remove(nbr_ip)
 
+	#Close SSH session
 	ssh_client.close()
 
 
 def ip_is_valid(file):
-	"""Documentation string for ip_is_valid function"""
+	"""Checks if all ip addresses in the file are valid. 
+	Returns tuple of 2 elements:
+	1) List of valid ip ranges;
+	2) List of appropriate subnet masks."""
+
 	ip_list = []
 	mask_list = []
 	check = False
@@ -330,6 +354,7 @@ def ip_is_valid(file):
 			with open(file) as myfile:
 				myfile.seek(0)
 
+				#Check if the file is empty
 				if not myfile.read(1):
 					print Fore.RED + Style.BRIGHT + "* File " + Fore.YELLOW + file + Fore.RED + Style.BRIGHT + " is empty!"
 					print "* Please verify your file!"
@@ -337,21 +362,22 @@ def ip_is_valid(file):
 
 				myfile.seek(0)
 				data = myfile.readlines()
-				#pprint(data)
 
 				#Remove duplicate lines(if they exist)
 				data_s = set(data)
-				#pprint(data_s)
 
+				#Convert back to the list
 				data = list(data_s)
-				#pprint(data)
 
+				#Count lines in the file
 				count = 0
 				for line in data:
 					count += 1
-					#Empty line
+
+					#Omit empty lines
 					if line == "\n" and ip_addr_pattern.search(line) == None:
 						continue
+					#Find only valid lines
 					elif ip_addr_pattern.search(line) != None:
 						entry = ip_addr_pattern.search(line).group(1)
 						ip = entry.split("/")[0]
@@ -369,8 +395,6 @@ def ip_is_valid(file):
 						print Fore.RED + Style.BRIGHT + "\n* Please verify your file: " + Fore.YELLOW + Style.BRIGHT + file
 						sys.exit()
 
-			#print ip_list
-			#print mask_list
 		except IOError as err:
 			print Fore.RED + Style.BRIGHT + str(err)
 			print Fore.RED + Style.BRIGHT + "\n* File " + Fore.YELLOW + Style.BRIGHT + file + Fore.RED + Style.BRIGHT + " does not exist! Please check and try again!\n"
@@ -389,6 +413,7 @@ def ip_is_valid(file):
 				check = False
 				break
 
+		#Evaluate the check flag
 		if check == True:
 			print Fore.GREEN + Style.BRIGHT + "\n* All ip addresses in the file " + Fore.YELLOW + Style.BRIGHT + file + Fore.GREEN + Style.BRIGHT + " are verified and valid!\n"
 			break
@@ -399,10 +424,7 @@ def ip_is_valid(file):
 
 
 def ping(ip):
-	"""Documentation string for ping function"""
-
-	#Checking ip reachability
-	#print Fore.BLUE + Style.BRIGHT + "* Checking IP reachability for --> " + Fore.YELLOW + Style.BRIGHT + ip
+	"""Ping ip address. If ping is successful add the ip address to the available_ips list."""
 
 	if sys.platform.startswith("linux") or sys.platform.startswith("darwin"):
 		ping_reply = subprocess.call(["ping", "-c", "2", "-w", "3", "-q", "-n", ip], stdout = subprocess.PIPE)
@@ -419,7 +441,7 @@ def ping(ip):
 		#print Fore.RED + Style.BRIGHT + "\n* Ping to the following device has failed --> " + Fore.YELLOW + Style.BRIGHT + ip
 
 def create_ping_threads(ip_list):
-	"""Documentation string for create_threads function"""
+	"""Creates threads for each ip address in ip_list."""
 
 	threads = []
 	for ip in ip_list:
@@ -432,25 +454,19 @@ def create_ping_threads(ip_list):
 
 
 def get_net_addr(ip, dec_mask):
-	"""Documentation string for get_net_addr function"""
+	"""Calculates network address for given ip address and subnet mask. 
+	get_net_addr(ip, dec_mask) --> net_addr."""
 
 	#Algorithm for subnet identification, based on IP and Subnet Mask
 
 	#Convert mask to binary string
-
 	netmask = "1" * int(dec_mask) + "0" * (32 - int(dec_mask))
-	#print netmask
 
 	no_of_zeros = netmask.count("0")
 	no_of_ones = 32 - no_of_zeros
 	no_of_hosts = abs(2 ** no_of_zeros - 2)
 
-	#print "ones " + str(no_of_ones)
-	#print "zeros " + str(no_of_zeros)
-	#print no_of_hosts
-
 	#Convert IP to binary string
-
 	ip_octets_padded = []
 	ip_octets_decimal = ip.split(".")
 
@@ -491,7 +507,7 @@ def get_net_addr(ip, dec_mask):
 	return net_addr_dec
 
 def get_all_net_hosts(ip, dec_mask):
-	"""Documentation string for get_all_net_hosts function"""
+	"""Calculates all possible host ip addresses for a given network address and subnet mask. Return a list of addresses."""
 
 	network = ipaddress.ip_network(u"%s/%s" % (ip, dec_mask))
 
@@ -499,20 +515,14 @@ def get_all_net_hosts(ip, dec_mask):
 
 	return net_hosts
 
-def print_available_ips():
-	"""Documentation string for get_available_ips function"""
-	pprint(available_ips)
-
 def chech_loc_ifaces():
-	"""Documentation string for check_loc_ifaces function"""
+	"""Find and remove local interfaces from the available_ips list."""
 
 	iface_list = netifaces.interfaces()
-	#print iface_list
 
 	for iface in iface_list:
 	 	try:
 	 		ip = netifaces.ifaddresses(iface)[netifaces.AF_INET][0]["addr"]
-	 		#pprint(ip)
 	 		if ip in available_ips:
 	 			#print "\n I'll remove the following interface from the list because it's mine interface:) --> " + Fore.YELLOW + Style.BRIGHT + iface
 	 			#print Fore.WHITE + Style.BRIGHT + "\n"
@@ -524,7 +534,7 @@ def chech_loc_ifaces():
 
 
 def pass_is_valid(file):
-	"""docustr"""
+	"""Check if the file with passwords is not empty and exists. Return a list of passwords from the file."""
 
 	pass_list = []
 
@@ -553,7 +563,7 @@ def pass_is_valid(file):
 	return pass_list
 
 def print_version_info():
-	"""Docs"""
+	"""Print general information for each device on the screen."""
 	for host in dev_ver_info:
 		print Fore.GREEN + Style.BRIGHT + "\n############################### General information for the device: %s ###############################" % host["hostname"]
 
@@ -574,7 +584,7 @@ def print_version_info():
 		print "\tEnd of S/W Maintainence Releases Date(EoL): %s" % host["eol"]
 
 def write_ver_info():
-	"""Docs"""
+	"""Write general information for each device to the file results/dev_general.txt"""
 
 	filename = r"./results/dev_general.txt"
 
@@ -613,7 +623,7 @@ def write_ver_info():
 
 
 def print_iface_info():
-	"""Docs"""
+	"""Print interface information for each device on the screen"""
 
 	for host in dev_iface_info.keys():
 		print Fore.GREEN + Style.BRIGHT + "\n############################### Interface information for the device: %s ###############################" % host
@@ -632,7 +642,7 @@ def print_iface_info():
 			print "\tBandwidth: %s Kbit/sec" % each_dict["bandwidth"]
 
 def write_iface_info():
-	"""Docs"""
+	"""Write interface information for each device to the file results/dev_interfaces.txt"""
 
 	filename = r"./results/dev_interfaces.txt"
 
@@ -668,7 +678,7 @@ def write_iface_info():
 
 
 def print_module_info():
-	"""Documentation string for print_module_info() function"""
+	"""Print information about modules for each device on the screen"""
 
 	for host in dev_module_info.keys():
 		print Fore.GREEN + Style.BRIGHT + "\n############################### Module information for the device: %s ###############################" % host
@@ -694,7 +704,7 @@ def print_module_info():
 			print "\tPID: %s" % each_dict["pid"]
 
 def write_module_info():
-	"""Documentation string for write_module_info() function"""
+	"""Write information about modules for each device to the file results/dev_modules.txt"""
 
 	filename = r"./results/dev_modules.txt"
 
@@ -735,7 +745,7 @@ def write_module_info():
 	print Fore.WHITE + Style.BRIGHT + "\n"
 
 def write_cred_csv():
-	"""Docs"""
+	"""Write credentials and management ips for each device to the file results/dev_credentials.csv"""
 
 	filename = r"./results/dev_credentials.csv"
 
@@ -761,7 +771,7 @@ def write_cred_csv():
 	print Fore.WHITE + Style.BRIGHT + "\n"
 
 def draw_topology():
-	"""Documentation string for draw_topology() function"""
+	"""Draw network topology"""
 
 	print Fore.CYAN + Style.BRIGHT + "\n* Generating network topology...\n" + Fore.BLUE + Style.BRIGHT
 
@@ -774,3 +784,108 @@ def draw_topology():
 	nx.draw_networkx_edge_labels(G, pos, neighborship_dict, label_pos = 0.3, font_size = 6)
 	nx.draw(G, pos, node_size = 700, with_labels = True)
 	matp.show()
+
+#Coffee cup
+#P.S Just a funny stuff
+coffee = r"""                                /\
+                          /\   / /
+                         / /   \ \
+                         \ \    \ \
+                          \ \    \ \
+                          / /    / /
+                         / /     \/
+                         \/
+                   ***********************
+                ***                       ***
+              **                             **
+              ****                         ***** ******
+              ***********************************      ** 
+              *********************************        **
+               *******************************        **
+                *****************************     ****
+                 *********************************
+                  **************************
+                   ***********************
+                      ***************** 
+                         ***********
+		"""
+
+if __name__ == "__main__":
+	try:
+		#Check the number of arguments
+		if len(sys.argv) == 3:
+			range_file = sys.argv[1]
+			pass_file = sys.argv[2]
+		else:
+			print sys.argv
+			print "\n* Incorrect number of arguments!"
+			sys.exit()
+
+		#Get and verify all ip addresses from the file
+		ips, masks = ip_is_valid(range_file)
+
+		#Get all passwords from the file
+		pass_list = pass_is_valid(pass_file)
+
+		#Create list to contain all host ip addresses for a specific network address
+		devices = []
+
+		for index, ip in enumerate(ips):
+			#Generate all possible host network addresses for a given network address(ip) and subnet mask
+			hosts = get_all_net_hosts(ip, masks[index])
+
+			#Create dictionary for each network address
+			tmp_dict = {"net_addr": ip, "hosts": hosts}
+
+			#Add dict to a list
+			devices.append(tmp_dict)
+		
+		#Ping each host ip address in the devices list 
+		print Fore.GREEN + Style.BRIGHT + "\n* Cheking ip connectivity....Please wait....\n"
+		for i in devices:	
+			create_ping_threads(i["hosts"])
+
+		#Remove local interface from the available_ips list
+		chech_loc_ifaces()
+
+		print Fore.GREEN + Style.BRIGHT + "\n* IP addresses are found!"
+		print "* I will create SSH connections to devices and gather all the necessary information for you!"
+		print "* Please wait....It might take up to 2 minutes"
+		print "* Here, drink coffee:)\n"
+		print Fore.WHITE + Style.BRIGHT + coffee
+
+		#Create ssh sessions only to unqueried devices
+		while True:
+			if len(available_ips) == 0:
+				break
+			else:
+				ip = available_ips[0]
+				client = open_ssh_conn(ip, pass_list)
+				if client:
+					gather_info(client)
+				else:
+					available_ips.remove(ip)
+		
+		print Fore.GREEN + Style.BRIGHT + "\n* Done!"
+
+		#Writing all the information to appropriate files
+		write_cred_csv()
+		write_module_info()
+		write_ver_info()
+		write_iface_info()
+
+		#print_module_info()
+		#print_version_info()
+		#print_iface_info()
+
+		#Draw network topology
+		draw_topology()
+
+		#Deinitialise colorama
+		deinit()
+
+	except KeyboardInterrupt:
+		print Fore.RED + Style.BRIGHT + "\n* Program was stoped by the user"
+		print "Bye"
+		sys.exit()
+
