@@ -1,0 +1,10 @@
+Value Required nbr_id (\S+)
+Value nbr_domain (\S+)
+Value nbr_ip (\S+)
+Value host_iface (\S+)
+Value nbr_iface (\S+)
+
+Start
+  ^Device ID: ${nbr_id}\.${nbr_domain}
+  ^\s+IP address: ${nbr_ip}
+  ^Interface: ${host_iface}\,\s+Port ID \(outgoing port\): ${nbr_iface} -> Record

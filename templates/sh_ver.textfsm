@@ -1,0 +1,23 @@
+Value sys_type (\S+)
+Value hard_platform (\d+)
+Value soft_name (\S+)
+Value soft_ver (\S+)
+Value hostname (\S+)
+Value uptime (.+)
+Value image (\S+)
+Value proc_type (\S+)
+Value proc_freq (\d+)
+Value ram_mem (\d+)
+Value shared_mem (\d+)
+Value nvram (\d+)
+Value conf_reg (\S+)
+
+
+Start
+  ^Cisco ${sys_type} Software\, \d+ Software \(${soft_name}\)\, Version ${soft_ver}\, .*
+  ^${hostname} uptime is ${uptime}
+  ^System image file is "${image}"
+  ^Cisco ${hard_platform} \(${proc_type}\) processor .+ with ${ram_mem}K\/${shared_mem}K bytes of memory\.
+  ^\S+ CPU at ${proc_freq}MHz
+  ^${nvram}K bytes of NVRAM\.
+  ^Configuration register is ${conf_reg} -> Record

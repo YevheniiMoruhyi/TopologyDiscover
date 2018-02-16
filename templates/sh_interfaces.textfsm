@@ -1,0 +1,14 @@
+Value Required iface (\S+)
+Value phy_st (\S+(\s\S+)?)
+Value prot_st (\S+)
+Value description (.+)
+Value ip_addr (\S+)
+Value mtu (\d+)
+Value bandwidth (\d+)
+
+
+Start
+  ^${iface} is ${phy_st}\, line protocol is ${prot_st}
+  ^\s+Description: ${description}
+  ^\s+Internet address is ${ip_addr}
+  ^\s+MTU ${mtu} bytes\, BW ${bandwidth} Kbit\/sec -> Record

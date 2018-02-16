@@ -1,0 +1,17 @@
+Value Required slot_no (\d+)
+Value module_name (.+)
+Value port_no (\d+)
+Value status (\S+)
+Value insert_time (\S+)
+Value serial_no (\S+)
+Value hard_rev (\S+)
+Value pid (\S+)
+
+Start
+  ^Slot ${slot_no}:
+  ^\s${module_name}\, ${port_no} ports?
+  ^\sPort adapter is ${status}
+  ^\sPort adapter insertion time ${insert_time} ago
+  ^\s.*Serial [Nn]umber\s+(:\s)?${serial_no}
+  ^\s+Hardware [Rr]evision\s*(:\s)?${hard_rev}
+  ^\s+(Product \(FRU\) Number|FRU Part Number)\s+(:\s)?${pid} -> Record

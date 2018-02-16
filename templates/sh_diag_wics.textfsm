@@ -1,0 +1,12 @@
+Value Required slot_no (\d+)
+Value module_name (\d.+)
+Value hard_rev (\S+)
+Value serial_no (\S+)
+Value pid (\S+)
+
+Start
+  ^\sWIC Slot ${slot_no}:
+  ^\sSerial ${module_name}
+  ^\sHardware revision ${hard_rev}
+  ^\sSerial [Nn]umber\s+${serial_no}
+  ^\sVersion Identifier\s+FRU Part Number\s+${pid} -> Record

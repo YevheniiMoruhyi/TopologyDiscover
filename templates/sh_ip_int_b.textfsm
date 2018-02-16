@@ -1,0 +1,8 @@
+Value iface (\S+)
+Value ip_addr (\S+)
+Value method (\S+)
+Value phy_st (\S+(\s\S+)?)
+Value prot_st (\S+)
+
+Start
+  ^${iface}\s+${ip_addr}\s+YES\s+${method}\s+${phy_st}\s+${prot_st} -> Record
